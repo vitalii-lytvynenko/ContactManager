@@ -129,8 +129,6 @@
                 salary: parseFloat(row.cells[4].innerText)
             };
 
-            console.log(contact);
-
             const response = await fetch(`/api/users/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
