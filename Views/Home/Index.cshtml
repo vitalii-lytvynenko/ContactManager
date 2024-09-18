@@ -1,0 +1,182 @@
+﻿@{
+    ViewData["Title"] = "Contact Manager";
+}
+
+
+
+<div class="text-center">
+    <h2>Contact Manager</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <fieldset class="grid">
+                <input type="file" id="csvFile" name="file" accept=".csv">
+                <button type="submit">Upload CSV</button>
+            </fieldset>
+        </form>
+    
+    <div class="grid">
+        <label>Filter by Name:
+        <input type="text" id="filterName" placeholder="Enter name" oninput="filterTable()">
+        </label>
+        <label>Filter by Phone:
+        <input type="text" id="filterPhone" placeholder="Enter phone" oninput="filterTable()">
+        </label>
+        <label>Filter by Married:
+        <select id="filterMarried" onchange="filterTable()">
+            <option value="">All</option>
+            <option value="true">Married</option>
+            <option value="false">Not Married</option>
+        </select>
+        </label>
+    </div>
+
+    <table id="contactsTable" border="1">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">Name</th>
+                <th onclick="sortTable(1)">Date of Birth</th>
+                <th onclick="sortTable(2)">Married</th>
+                <th onclick="sortTable(3)">Phone</th>
+                <th onclick="sortTable(4)">Salary</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        let contactsData = [];
+
+        document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const file = document.getElementById("csvFile").files[0];
+            if (!file) {
+                console.error("No file selected!");
+                return;
+            }
+            console.log(file);
+            formData.append("file", document.getElementById("csvFile").files[0]);
+
+            const response = await fetch('/api/users/upload', {
+                method: 'POST',
+                body: formData
+            });
+            if (response.ok) {
+                alert("File uploaded successfully!");
+                loadContacts();
+            } else {
+                alert("Error uploading file");
+            }
+        });
+
+        async function loadContacts() {
+            const response = await fetch('/api/users');
+            const data = await response.json();
+            contactsData = data;
+            displayContacts(contactsData);
+        }
+
+        function displayContacts(data) {
+            const tableBody = document.querySelector("#contactsTable tbody");
+            tableBody.innerHTML = "";
+
+            data.forEach(contact => {
+                const row = document.createElement("tr");
+
+                row.innerHTML = `
+                        <td contenteditable="true">${contact.name}</td>
+                        <td contenteditable="fasle" data-date="${new Date(contact.dateOfBirth).toISOString()}">${new Date(contact.dateOfBirth).toLocaleDateString()}</td>
+                        <td>
+                            <select>
+                                <option value="true" ${contact.married ? 'selected' : ''}>True</option>
+                                <option value="false" ${!contact.married ? 'selected' : ''}>False</option>
+                            </select>
+                        </td>
+                        <td contenteditable="true">${contact.phone}</td>
+                        <td contenteditable="true">${contact.salary.toFixed(2)}</td>
+                        <td>
+                            <button class="secondary" onclick="deleteContact(${contact.id})">Delete</button>
+                            <button onclick="updateContact(${contact.id}, this)">Update</button>
+                        </td>
+                    `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function deleteContact(id) {
+            const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                loadContacts();
+            } else {
+                alert("Error deleting contact");
+            }
+        }
+
+        async function updateContact(id, button) {
+            const row = button.parentNode.parentNode;
+
+            const dateOfBirthUTC = row.cells[1].getAttribute('data-date');
+            const dateOfBirth = new Date(dateOfBirthUTC);
+
+            const married = row.cells[2].querySelector('select').value === 'true';
+
+            const contact = {
+                name: row.cells[0].innerText,
+                dateOfBirth: dateOfBirth.toISOString(),
+                married: married,
+                phone: row.cells[3].innerText,
+                salary: parseFloat(row.cells[4].innerText)
+            };
+
+            console.log(contact);
+
+            const response = await fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(contact)
+            });
+            if (response.ok) {
+                alert("Contact updated successfully");
+            } else {
+                alert("Error updating contact");
+            }
+        }
+
+        function filterTable() {
+            const nameFilter = document.getElementById("filterName").value.toLowerCase();
+            const phoneFilter = document.getElementById("filterPhone").value.toLowerCase();
+            const marriedFilter = document.getElementById("filterMarried").value;
+
+            const filteredData = contactsData.filter(contact => {
+                const nameMatch = contact.name.toLowerCase().includes(nameFilter);
+                const phoneMatch = contact.phone.toLowerCase().includes(phoneFilter);
+                const marriedMatch = marriedFilter === "" || contact.married.toString() === marriedFilter;
+                return nameMatch && phoneMatch && marriedMatch;
+            });
+
+            displayContacts(filteredData);
+        }
+
+        function sortTable(columnIndex) {
+            contactsData.sort((a, b) => {
+                let valueA = Object.values(a)[columnIndex];
+                let valueB = Object.values(b)[columnIndex];
+
+                if (typeof valueA === "string") {
+                    return valueA.localeCompare(valueB);
+                }
+
+                if (typeof valueA === "number" || valueA instanceof Date) {
+                    return valueA > valueB ? 1 : -1;
+                }
+
+                return valueA === valueB ? 0 : valueA ? -1 : 1;
+            });
+
+            displayContacts(contactsData);
+        }
+
+        window.onload = loadContacts;
+    </script>
+</div>
